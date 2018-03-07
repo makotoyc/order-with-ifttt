@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="jp">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.2/knockout-min.js" integrity="sha256-owX7sroiO/O1a7h3a4X29A1g3QgqdNvijRQ7V5TH45M=" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.21.0/moment-with-locales.min.js"></script>
+  <title>Document</title>
+</head>
+
+<body>
+  <form id="main" class="horizontal">
+    <div id="shoplist">
+      <h2>ご注文内容</h2>
+      <label for="item1">商品</label>
+      <select id="item1" data-bind="options: availableItem1,
+                                                optionsText: 'name',
+                                                value: item1" required></select>
+      <label for="item2">オプション</label>
+      <select id="item2" data-bind="options: availableItem2,
+                                                optionsText: 'name',
+                                                value: item2" required></select>
+      <label for="quantity">数量</label>
+      <input type="number" id="quantity" min="1" max="10" data-bind="value: quantity" required>
+      <label for="date">お受け取り希望日</label>
+      <select id="date" data-bind="options: availableDate,
+                                                optionsText: $data,
+                                                value: receiveAt" required></select>
+      <label for="sum">ご請求額</label>
+      <span id="total" data-bind="text: total"></span>
+      <br>
+      <br>
+      <label for="comments">お客様コメント</label>
+      <textarea id="comments" data-bind="text: comments" rows="1"></textarea>
+    </div>
+    <div id="customer">
+      <h2>お客様情報</h2>
+      <label for="name">お名前</label>
+      <input type="text" id="name" data-bind="value: name" required>
+      <label for="mail">メールアドレス</label>
+      <input type="email" id="mail" data-bind="value: mail" required>
+      <p>ご注文受付後、入力いただいたメールアドレス宛に注文内容確認メールを送信いたします。</p>
+    </div>
+    <br>
+    <br>
+    <button class="btn btn-default" type="button" id="submit" onclick="order(this)" disabled>注文する</button>
+  </form>
+</body>
+
+</html>
+
+<script type="text/javascript">
+  /** IFTTT key */
+  // FIXME -- you must change this value.
+  const key = "dL2FNckhIvMOIkRjROKgei";
+  /** Item List */
+  const item1Array = [{
+      name: "Happy Birthday(ベア)",
+      price: 2700
+    },
+    {
+      name: "Happy Birthday(ユニコーン)",
+      price: 2700
+    }
+  ];
+  const item2Array = [{
+      name: "付属お菓子：OREO",
+      price: 100
+    },
+    {
+      name: "なし",
+      price: 0
+    }
+  ];
+  const openDates = [
+    // YYYYMMDD
+    "20180301",
+    "20180307",
+    "20180311",
+    "20180312",
+    "20180314",
+    "20180318",
+    "20180319",
+    "20180321",
+    "20180325",
+    "20180326",
+    "20180328",
+    "20180330",
+  ]
+  const leadTime = 3;
+
+  const ViewModel = {
+    availableItem1: ko.observableArray(item1Array),
+    availableItem2: ko.observableArray(item2Array),
+    availableDate: ko.observableArray(),
+
+    name: ko.observable(),
+    mail: ko.observable(),
+    item1: ko.observable(),
+    item2: ko.observable(item2Array[0]),
+    quantity: ko.observable(1),
+    receiveAt: ko.observable(),
+    total: ko.pureComputed(() => {
+      if (ViewModel.item1() != undefined) {
+        return (ViewModel.item1().price + ViewModel.item2().price) * ViewModel.quantity();
+      }
+    }),
+    comments: ko.observable(),
+  };
+  /** init settings*/
+  $(document).ready(function() {
+    openDates.forEach((d) => {
+      moment.locale('ja');
+      const open = moment(d, "YYYYMMDD");
+      console.log(open > moment().add(leadTime, "days"));
+      if (open > moment().add(leadTime, "days")) {
+        ViewModel.availableDate.push(open.format("YYYY年MM月DD日"));
+      }
+    });
+
+    ko.applyBindings(ViewModel, document.getElementById('main'));
+  });
+
+  /** interactive settings */
+  jQuery(function($) {
+    $('#main').on('input', function() {
+      // Submit Button settings
+      $(this).find('#submit').attr('disabled', !this.checkValidity());
+    });
+  });
+
+  /** utils */
+  function order(btn) {
+    btn.disabled = true;
+    const messages = build();
+    console.log(messages);
+
+    $.ajax({
+      url: `https://maker.ifttt.com/trigger/hello/with/key/${key}/`,
+      type: 'POST',
+      data: {
+        value1: messages[0],
+        value2: messages[1],
+        value3: messages[2]
+      }
+    }).done((data) => {
+      console.log(data);
+    }).fail(() => {
+      btn.disabled = false;
+      console.log("failed.");
+    });
+  }
+
+  function build() {
+    const messages = new Array("", "", "");
+    messages[0] = ViewModel.name();
+    messages[1] = ViewModel.mail();
+    messages[2] =
+      `
+    【お客様情報】
+    お名前：${ViewModel.name()} 様
+    メールアドレス：${ViewModel.mail()}
+
+    【注文内容】
+    商品：${ViewModel.item1().name}
+    オプション：${ViewModel.item2().name}
+    数量：${ViewModel.quantity()}
+    ご請求金額：${ViewModel.total()}
+    お受け取り希望日：${ViewModel.receiveAt()}
+    お客様コメント：${ViewModel.comments()}
+    `;
+    return messages;
+  }
+</script>
